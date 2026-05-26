@@ -27,7 +27,7 @@ fmt:
 
 # Background logger; default interval 10s. Usage: just run-log 5s
 run-log interval="10s":
-    cargo run -- log --interval {{interval}}
+    cargo run -- log --interval "$(echo '{{interval}}' | sed 's/^interval=//')"
 
 # One-shot capture session (Ctrl-C to stop and print summary)
 capture:
@@ -39,7 +39,7 @@ run-tui:
 
 # Local web UI with analysis charts. Usage: just serve 8787
 serve port="8787":
-    cargo run -- serve --port {{port}}
+    cargo run -- serve --port "$(echo '{{port}}' | sed 's/^port=//')"
 
 # Print resolved data paths
 paths:
