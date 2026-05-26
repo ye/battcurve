@@ -96,3 +96,7 @@ just lint      # clippy with -D warnings
   tags if you need fully offline operation.
 - A clean dQ/dV or full discharge curve only appears after a real charge/discharge cycle
   has been logged.
+
+## License
+
+[MIT](LICENSE) © 2026 Ye Wang

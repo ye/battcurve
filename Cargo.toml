@@ -3,6 +3,7 @@ name = "battcurve"
 version = "0.1.0"
 edition = "2021"
 description = "Sample and visualize laptop battery charge / discharge / dQ-dV / health curves"
+license = "MIT"
 
 [[bin]]
 name = "battcurve"
