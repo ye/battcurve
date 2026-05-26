@@ -38,8 +38,17 @@ pub async fn run(port: u16, backend: Backend) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn index() -> Html<&'static str> {
-    Html(include_str!("../web/index.html"))
+async fn index() -> Html<String> {
+    // The page is fully self-contained: uPlot's JS/CSS are vendored in src/web/
+    // and inlined here at compile time, so no external/CDN requests are made.
+    const TEMPLATE: &str = include_str!("../web/index.html");
+    const UPLOT_CSS: &str = include_str!("../web/uplot.min.css");
+    const UPLOT_JS: &str = include_str!("../web/uplot.min.js");
+    Html(
+        TEMPLATE
+            .replace("__UPLOT_CSS__", UPLOT_CSS)
+            .replace("__UPLOT_JS__", UPLOT_JS),
+    )
 }
 
 async fn samples(State(backend): State<Backend>) -> ApiResult<Vec<Sample>> {

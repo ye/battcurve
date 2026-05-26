@@ -4,19 +4,46 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>battcurve</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css">
+<style>/* uPlot (vendored, inlined by the server) */
+__UPLOT_CSS__
+</style>
 <style>
-  :root { color-scheme: dark; }
-  body { margin: 0; font: 14px/1.45 system-ui, sans-serif; background: #0e1116; color: #d6dde6; }
-  header { padding: 14px 20px; border-bottom: 1px solid #232a33; display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; }
+  /* Follow the OS light/dark preference; tokens drive both the page and the
+     canvas axis colors (read back in JS via getComputedStyle). */
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --panel: #f6f7f9;
+    --border: #d9dee4;
+    --text: #1a2129;
+    --muted: #5b6675;
+    --axis: #5b6675;
+    --grid: rgba(0,0,0,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1116;
+      --panel: #151a21;
+      --border: #232a33;
+      --text: #d6dde6;
+      --muted: #9fb3c8;
+      --axis: #9fb3c8;
+      --grid: rgba(255,255,255,0.09);
+    }
+  }
+  body { margin: 0; font: 14px/1.45 system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--border); display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; }
   header h1 { font-size: 18px; margin: 0; }
-  #health { color: #9fb3c8; font-size: 13px; }
+  #health { color: var(--muted); font-size: 13px; }
   main { padding: 16px 20px; display: grid; gap: 22px; max-width: 1000px; margin: 0 auto; }
-  .card { background: #151a21; border: 1px solid #232a33; border-radius: 10px; padding: 14px 16px; }
-  .card h2 { font-size: 14px; margin: 0 0 10px; color: #aebfd0; font-weight: 600; }
-  .card p.note { color:#7e8a99; font-size:12px; margin:4px 0 12px; }
-  select { background:#0e1116; color:#d6dde6; border:1px solid #2c3540; border-radius:6px; padding:4px 8px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .card h2 { font-size: 14px; margin: 0 0 10px; color: var(--text); font-weight: 600; }
+  .card p.note { color: var(--muted); font-size:12px; margin:4px 0 12px; }
+  select { background: var(--bg); color: var(--text); border:1px solid var(--border); border-radius:6px; padding:4px 8px; }
   .uplot { width: 100%; }
+  /* uPlot legend inherits page text color */
+  .u-legend { color: var(--text); }
+  .u-legend th { color: var(--text); }
 </style>
 </head>
 <body>
@@ -50,44 +77,66 @@
   </section>
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
+<script>/* uPlot (vendored, inlined by the server) */
+__UPLOT_JS__
+</script>
 <script>
 const W = () => Math.min(940, document.querySelector('main').clientWidth - 36);
 
-function mkChart(el, opts) {
-  return new uPlot(Object.assign({ width: W(), height: 260 }, opts), [], el);
+// Pull theme colors from CSS so the canvas matches the page in light AND dark.
+function palette() {
+  const css = getComputedStyle(document.documentElement);
+  const v = n => css.getPropertyValue(n).trim();
+  return {
+    axis: v('--axis') || '#888',
+    grid: v('--grid') || 'rgba(128,128,128,0.2)',
+    soc: '#22c55e', volt: '#3b82f6', power: '#f59e0b', dqdv: '#ec4899',
+  };
 }
 
-// --- Time chart: SoC / Voltage / Power on shared time axis ---
-const timeChart = mkChart(document.getElementById('chart-time'), {
-  scales: { x: { time: true }, soc: {}, v: {}, w: {} },
-  series: [
-    {},
-    { label: 'SoC %', stroke: '#4ade80', scale: 'soc' },
-    { label: 'Voltage V', stroke: '#60a5fa', scale: 'v' },
-    { label: 'Power W', stroke: '#f59e0b', scale: 'w' },
-  ],
-  axes: [
-    {},
-    { scale: 'soc', stroke: '#4ade80', grid: { show: true, stroke: '#1c232c' } },
-    { scale: 'v', side: 1, stroke: '#60a5fa', grid: { show: false } },
-  ],
-});
+// A themed numeric axis (time disabled — these axes are SoC / Voltage, not time).
+function axis(p, opts) {
+  return Object.assign({ stroke: p.axis, grid: { stroke: p.grid }, ticks: { stroke: p.grid } }, opts);
+}
 
-const vsocChart = mkChart(document.getElementById('chart-vsoc'), {
-  scales: { x: {}, y: {} },
-  series: [ { label: 'SoC %' }, { label: 'Voltage V', stroke: '#60a5fa', width: 2 } ],
-  axes: [ { label: 'State of charge (%)' }, { label: 'Voltage (V)' } ],
-});
+let timeChart, vsocChart, dqdvChart;
 
-const dqdvChart = mkChart(document.getElementById('chart-dqdv'), {
-  scales: { x: {}, y: {} },
-  series: [ { label: 'Voltage V' }, { label: 'dQ/dV', stroke: '#f472b6', width: 2 } ],
-  axes: [ { label: 'Voltage (V)' }, { label: 'dQ/dV (Ah/V)' } ],
-});
+function buildCharts() {
+  const p = palette();
+  [timeChart, vsocChart, dqdvChart].forEach(c => c && c.destroy());
+
+  timeChart = new uPlot({
+    width: W(), height: 260,
+    scales: { x: { time: true }, soc: {}, v: {}, w: {} },
+    series: [
+      {},
+      { label: 'SoC %', stroke: p.soc, scale: 'soc' },
+      { label: 'Voltage V', stroke: p.volt, scale: 'v' },
+      { label: 'Power W', stroke: p.power, scale: 'w' },
+    ],
+    axes: [
+      axis(p, {}),
+      axis(p, { scale: 'soc' }),
+      axis(p, { scale: 'v', side: 1, grid: { show: false } }),
+    ],
+  }, [], document.getElementById('chart-time'));
+
+  vsocChart = new uPlot({
+    width: W(), height: 260,
+    scales: { x: { time: false }, y: {} },
+    series: [ { label: 'SoC %' }, { label: 'Voltage V', stroke: p.volt, width: 2 } ],
+    axes: [ axis(p, { label: 'State of charge (%)' }), axis(p, { label: 'Voltage (V)' }) ],
+  }, [], document.getElementById('chart-vsoc'));
+
+  dqdvChart = new uPlot({
+    width: W(), height: 260,
+    scales: { x: { time: false }, y: {} },
+    series: [ { label: 'Voltage V' }, { label: 'dQ/dV', stroke: p.dqdv, width: 2 } ],
+    axes: [ axis(p, { label: 'Voltage (V)' }), axis(p, { label: 'dQ/dV (Ah/V)' }) ],
+  }, [], document.getElementById('chart-dqdv'));
+}
 
 async function j(url) { const r = await fetch(url); if (!r.ok) throw new Error(url); return r.json(); }
-
 function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
 
 async function refreshTime() {
@@ -111,8 +160,7 @@ async function refreshHealth() {
 
 function option(value, text) {
   const o = document.createElement('option');
-  o.value = value;
-  o.textContent = text;
+  o.value = value; o.textContent = text;
   return o;
 }
 
@@ -121,10 +169,7 @@ async function refreshSessions() {
   const sessions = await j('/api/sessions');
   const prev = sel.value;
   clear(sel);
-  if (!sessions.length) {
-    sel.appendChild(option('', 'no sessions yet'));
-    return;
-  }
+  if (!sessions.length) { sel.appendChild(option('', 'no sessions yet')); return; }
   for (const s of sessions) {
     const when = new Date(s.start_ts * 1000).toLocaleString();
     sel.appendChild(option(s.id,
@@ -147,15 +192,21 @@ async function loadSession(id) {
 }
 
 document.getElementById('session-select').addEventListener('change', e => loadSession(e.target.value));
+
 window.addEventListener('resize', () => {
   const w = W();
   [timeChart, vsocChart, dqdvChart].forEach(c => c.setSize({ width: w, height: 260 }));
 });
 
+// Rebuild (recolor) charts when the OS theme flips, then repaint with data.
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { buildCharts(); tick(); });
+
 async function tick() {
   try { await Promise.all([refreshTime(), refreshHealth(), refreshSessions()]); }
   catch (e) { console.warn(e); }
 }
+
+buildCharts();
 tick();
 setInterval(() => { refreshTime(); refreshHealth(); }, 5000);
 </script>
