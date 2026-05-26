@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>battcurve</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css">
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; font: 14px/1.45 system-ui, sans-serif; background: #0e1116; color: #d6dde6; }
+  header { padding: 14px 20px; border-bottom: 1px solid #232a33; display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  #health { color: #9fb3c8; font-size: 13px; }
+  main { padding: 16px 20px; display: grid; gap: 22px; max-width: 1000px; margin: 0 auto; }
+  .card { background: #151a21; border: 1px solid #232a33; border-radius: 10px; padding: 14px 16px; }
+  .card h2 { font-size: 14px; margin: 0 0 10px; color: #aebfd0; font-weight: 600; }
+  .card p.note { color:#7e8a99; font-size:12px; margin:4px 0 12px; }
+  select { background:#0e1116; color:#d6dde6; border:1px solid #2c3540; border-radius:6px; padding:4px 8px; }
+  .uplot { width: 100%; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔋 battcurve</h1>
+  <span id="health">loading…</span>
+</header>
+<main>
+  <section class="card">
+    <h2>Charge / Discharge over time</h2>
+    <p class="note">State of charge, voltage and power across the whole log. Live-refreshing.</p>
+    <div id="chart-time"></div>
+  </section>
+
+  <section class="card">
+    <h2>Per-session analysis</h2>
+    <p class="note">Pick a charge or discharge session to see its voltage-vs-SoC curve and dQ/dV.</p>
+    <select id="session-select"></select>
+  </section>
+
+  <section class="card">
+    <h2>Voltage vs State of Charge</h2>
+    <p class="note">The classic plateau (discharge) / CC–CV climb (charge).</p>
+    <div id="chart-vsoc"></div>
+  </section>
+
+  <section class="card">
+    <h2>dQ/dV — differential capacity</h2>
+    <p class="note">Peaks mark electrochemical phase transitions; useful for tracking aging.</p>
+    <div id="chart-dqdv"></div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
+<script>
+const W = () => Math.min(940, document.querySelector('main').clientWidth - 36);
+
+function mkChart(el, opts) {
+  return new uPlot(Object.assign({ width: W(), height: 260 }, opts), [], el);
+}
+
+// --- Time chart: SoC / Voltage / Power on shared time axis ---
+const timeChart = mkChart(document.getElementById('chart-time'), {
+  scales: { x: { time: true }, soc: {}, v: {}, w: {} },
+  series: [
+    {},
+    { label: 'SoC %', stroke: '#4ade80', scale: 'soc' },
+    { label: 'Voltage V', stroke: '#60a5fa', scale: 'v' },
+    { label: 'Power W', stroke: '#f59e0b', scale: 'w' },
+  ],
+  axes: [
+    {},
+    { scale: 'soc', stroke: '#4ade80', grid: { show: true, stroke: '#1c232c' } },
+    { scale: 'v', side: 1, stroke: '#60a5fa', grid: { show: false } },
+  ],
+});
+
+const vsocChart = mkChart(document.getElementById('chart-vsoc'), {
+  scales: { x: {}, y: {} },
+  series: [ { label: 'SoC %' }, { label: 'Voltage V', stroke: '#60a5fa', width: 2 } ],
+  axes: [ { label: 'State of charge (%)' }, { label: 'Voltage (V)' } ],
+});
+
+const dqdvChart = mkChart(document.getElementById('chart-dqdv'), {
+  scales: { x: {}, y: {} },
+  series: [ { label: 'Voltage V' }, { label: 'dQ/dV', stroke: '#f472b6', width: 2 } ],
+  axes: [ { label: 'Voltage (V)' }, { label: 'dQ/dV (Ah/V)' } ],
+});
+
+async function j(url) { const r = await fetch(url); if (!r.ok) throw new Error(url); return r.json(); }
+
+function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+async function refreshTime() {
+  const s = await j('/api/samples');
+  if (!s.length) return;
+  timeChart.setData([
+    s.map(x => x.ts),
+    s.map(x => x.capacity_pct),
+    s.map(x => x.voltage_v),
+    s.map(x => x.power_w),
+  ]);
+}
+
+async function refreshHealth() {
+  const h = await j('/api/health');
+  const el = document.getElementById('health');
+  if (!h) { el.textContent = 'no data yet — start the logger (just run-log)'; return; }
+  el.textContent = `Health ${h.health_pct.toFixed(1)}% of design · wear ${h.wear_pct.toFixed(1)}% · `
+    + `${h.energy_full_wh.toFixed(1)}/${h.energy_full_design_wh.toFixed(1)} Wh · ${h.cycle_count} cycles`;
+}
+
+function option(value, text) {
+  const o = document.createElement('option');
+  o.value = value;
+  o.textContent = text;
+  return o;
+}
+
+async function refreshSessions() {
+  const sel = document.getElementById('session-select');
+  const sessions = await j('/api/sessions');
+  const prev = sel.value;
+  clear(sel);
+  if (!sessions.length) {
+    sel.appendChild(option('', 'no sessions yet'));
+    return;
+  }
+  for (const s of sessions) {
+    const when = new Date(s.start_ts * 1000).toLocaleString();
+    sel.appendChild(option(s.id,
+      `#${s.id} ${s.kind} ${s.start_soc.toFixed(0)}→${s.end_soc.toFixed(0)}% · ${when}`));
+  }
+  const keep = prev && [...sel.options].some(o => o.value === prev);
+  sel.value = keep ? prev : sessions[sessions.length - 1].id;
+  loadSession(sel.value);
+}
+
+async function loadSession(id) {
+  const d = await j('/api/session/' + id);
+  // V vs SoC: sort by SoC ascending (uPlot needs increasing x), dedupe.
+  const pts = d.samples.map(s => [s.capacity_pct, s.voltage_v]).sort((a, b) => a[0] - b[0]);
+  const xs = [], ys = [];
+  let last = null;
+  for (const [soc, v] of pts) { if (soc !== last) { xs.push(soc); ys.push(v); last = soc; } }
+  vsocChart.setData([xs, ys]);
+  dqdvChart.setData([ d.dq_dv.map(p => p.voltage_v), d.dq_dv.map(p => p.dqdv) ]);
+}
+
+document.getElementById('session-select').addEventListener('change', e => loadSession(e.target.value));
+window.addEventListener('resize', () => {
+  const w = W();
+  [timeChart, vsocChart, dqdvChart].forEach(c => c.setSize({ width: w, height: 260 }));
+});
+
+async function tick() {
+  try { await Promise.all([refreshTime(), refreshHealth(), refreshSessions()]); }
+  catch (e) { console.warn(e); }
+}
+tick();
+setInterval(() => { refreshTime(); refreshHealth(); }, 5000);
+</script>
+</body>
+</html>

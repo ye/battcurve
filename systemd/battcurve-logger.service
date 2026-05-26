@@ -1,0 +1,12 @@
+[Unit]
+Description=battcurve background battery logger
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/battcurve log --interval 30s --store sqlite
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
