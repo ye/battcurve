@@ -13,6 +13,11 @@ build:
 release:
     cargo build --release
 
+# Install the `battcurve` binary to ~/.cargo/bin (must be on your PATH)
+install:
+    cargo install --path .
+    @echo "Installed. Run 'battcurve --help' (ensure ~/.cargo/bin is on your PATH)."
+
 # Run all tests
 test:
     cargo test

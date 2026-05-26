@@ -93,8 +93,8 @@ fn print_summary(samples: &[Sample]) {
     );
 
     for sess in analysis::segment_sessions(samples) {
-        let avg_w = sess.samples.iter().map(|s| s.power_w.abs()).sum::<f64>()
-            / sess.samples.len() as f64;
+        let avg_w =
+            sess.samples.iter().map(|s| s.power_w.abs()).sum::<f64>() / sess.samples.len() as f64;
         print!(
             "{:?}: {:.1}% -> {:.1}% over {}m {}s, avg {:.2} W",
             sess.kind,

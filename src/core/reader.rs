@@ -152,7 +152,10 @@ mod tests {
         assert_eq!(s.status, Status::Discharging);
         assert!((s.voltage_v - 11.825).abs() < 1e-6);
         assert!((s.energy_wh - 28.202).abs() < 1e-6);
-        assert!((s.power_w - (-6.834)).abs() < 1e-6, "power must be negative while discharging");
+        assert!(
+            (s.power_w - (-6.834)).abs() < 1e-6,
+            "power must be negative while discharging"
+        );
         assert_eq!(s.capacity_pct, 70.0);
         assert_eq!(s.cycle_count, 22);
     }
@@ -173,7 +176,10 @@ mod tests {
         assert_eq!(s.status, Status::Charging);
         assert!((s.energy_wh - 24.0).abs() < 1e-6);
         assert!((s.energy_full_wh - 48.0).abs() < 1e-6);
-        assert!((s.power_w - 12.0).abs() < 1e-6, "power must be positive while charging");
+        assert!(
+            (s.power_w - 12.0).abs() < 1e-6,
+            "power must be positive while charging"
+        );
     }
 
     #[test]

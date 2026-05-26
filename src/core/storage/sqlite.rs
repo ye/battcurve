@@ -78,9 +78,7 @@ impl Storage for SqliteStore {
     }
 
     fn read_all(&self) -> Result<Vec<Sample>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT * FROM samples ORDER BY ts ASC")?;
+        let mut stmt = self.conn.prepare("SELECT * FROM samples ORDER BY ts ASC")?;
         let rows = stmt.query_map([], Self::row_to_sample)?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
@@ -121,7 +119,10 @@ mod tests {
             s.append(&sample(ts)).unwrap();
         }
         let all = s.read_all().unwrap();
-        assert_eq!(all.iter().map(|x| x.ts).collect::<Vec<_>>(), vec![1, 2, 3, 10]);
+        assert_eq!(
+            all.iter().map(|x| x.ts).collect::<Vec<_>>(),
+            vec![1, 2, 3, 10]
+        );
         assert_eq!(all[0], sample(1));
         let mid = s.read_range(2, 3).unwrap();
         assert_eq!(mid.iter().map(|x| x.ts).collect::<Vec<_>>(), vec![2, 3]);
@@ -145,6 +146,10 @@ mod tests {
         let mut writer = SqliteStore::open(&path).unwrap();
         let reader = SqliteStore::open(&path).unwrap();
         writer.append(&sample(1)).unwrap();
-        assert_eq!(reader.read_all().unwrap().len(), 1, "reader must see writer's row");
+        assert_eq!(
+            reader.read_all().unwrap().len(),
+            1,
+            "reader must see writer's row"
+        );
     }
 }

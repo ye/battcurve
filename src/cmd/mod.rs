@@ -24,7 +24,9 @@ pub fn parse_duration(s: &str) -> Result<Duration> {
     } else {
         (s, 1.0)
     };
-    let n: f64 = num.parse().map_err(|_| anyhow::anyhow!("bad duration {s:?}"))?;
+    let n: f64 = num
+        .parse()
+        .map_err(|_| anyhow::anyhow!("bad duration {s:?}"))?;
     if n <= 0.0 {
         bail!("duration must be positive, got {s:?}");
     }

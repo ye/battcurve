@@ -236,7 +236,11 @@ pub fn health_summary(samples: &[Sample]) -> Option<HealthSummary> {
     let health = last.health_pct();
     Some(HealthSummary {
         health_pct: health,
-        wear_pct: if health.is_finite() { 100.0 - health } else { f64::NAN },
+        wear_pct: if health.is_finite() {
+            100.0 - health
+        } else {
+            f64::NAN
+        },
         energy_full_wh: last.energy_full_wh,
         energy_full_design_wh: last.energy_full_design_wh,
         cycle_count: last.cycle_count,
@@ -265,9 +269,18 @@ mod tests {
     fn derives_power_from_energy_when_missing() {
         // Mirrors this HP: power_w reads 0 but energy drains ~12 Wh/h.
         let mut s = vec![
-            Sample { energy_wh: 24.834, ..sample(0, Status::Discharging, 11.45, 0.0, 60.0) },
-            Sample { energy_wh: 24.823, ..sample(2, Status::Discharging, 11.45, 0.0, 60.0) },
-            Sample { energy_wh: 24.811, ..sample(4, Status::Discharging, 11.45, 0.0, 60.0) },
+            Sample {
+                energy_wh: 24.834,
+                ..sample(0, Status::Discharging, 11.45, 0.0, 60.0)
+            },
+            Sample {
+                energy_wh: 24.823,
+                ..sample(2, Status::Discharging, 11.45, 0.0, 60.0)
+            },
+            Sample {
+                energy_wh: 24.811,
+                ..sample(4, Status::Discharging, 11.45, 0.0, 60.0)
+            },
         ];
         fill_derived_power(&mut s);
         assert_eq!(s[0].power_w, 0.0, "first sample has no predecessor");
@@ -281,10 +294,22 @@ mod tests {
         // Energy holds flat for several 1s samples, then steps down 12 mWh.
         // The step must be amortized over the whole flat span, not spike on one tick.
         let mut s = vec![
-            Sample { energy_wh: 24.551, ..sample(0, Status::Discharging, 11.4, 0.0, 61.0) },
-            Sample { energy_wh: 24.551, ..sample(1, Status::Discharging, 11.4, 0.0, 61.0) },
-            Sample { energy_wh: 24.551, ..sample(2, Status::Discharging, 11.4, 0.0, 61.0) },
-            Sample { energy_wh: 24.539, ..sample(3, Status::Discharging, 11.4, 0.0, 61.0) },
+            Sample {
+                energy_wh: 24.551,
+                ..sample(0, Status::Discharging, 11.4, 0.0, 61.0)
+            },
+            Sample {
+                energy_wh: 24.551,
+                ..sample(1, Status::Discharging, 11.4, 0.0, 61.0)
+            },
+            Sample {
+                energy_wh: 24.551,
+                ..sample(2, Status::Discharging, 11.4, 0.0, 61.0)
+            },
+            Sample {
+                energy_wh: 24.539,
+                ..sample(3, Status::Discharging, 11.4, 0.0, 61.0)
+            },
         ];
         fill_derived_power(&mut s);
         // Step is over 3 s: (24.539-24.551)/(3/3600) = -14.4 W, not -43 W.
@@ -329,7 +354,10 @@ mod tests {
         ];
         let sess = segment_sessions(&s).pop().unwrap();
         let q = cumulative_charge_ah(&sess);
-        assert!(q.windows(2).all(|w| w[1] >= w[0]), "Q must be non-decreasing");
+        assert!(
+            q.windows(2).all(|w| w[1] >= w[0]),
+            "Q must be non-decreasing"
+        );
         // ~1 A over 1 h ~= 1 Ah total.
         assert!((q.last().unwrap() - 1.0).abs() < 0.05, "got {:?}", q.last());
     }
@@ -347,13 +375,24 @@ mod tests {
         let sess = segment_sessions(&s).pop().unwrap();
         let cccv = detect_cc_cv(&sess);
         assert_eq!(cccv.cv_start_index, Some(2));
-        assert!(cccv.cc_avg_current_a > cccv.cv_avg_current_a, "current tapers in CV");
+        assert!(
+            cccv.cc_avg_current_a > cccv.cv_avg_current_a,
+            "current tapers in CV"
+        );
     }
 
     #[test]
     fn dq_dv_is_smoothed_and_nonempty() {
         let s: Vec<Sample> = (0..20)
-            .map(|i| sample(i * 60, Status::Charging, 11.0 + i as f64 * 0.08, 24.0, i as f64 * 5.0))
+            .map(|i| {
+                sample(
+                    i * 60,
+                    Status::Charging,
+                    11.0 + i as f64 * 0.08,
+                    24.0,
+                    i as f64 * 5.0,
+                )
+            })
             .collect();
         let sess = segment_sessions(&s).pop().unwrap();
         let curve = dq_dv(&sess, 5);

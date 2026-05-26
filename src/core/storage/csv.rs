@@ -15,12 +15,17 @@ impl CsvStore {
     /// Open (creating if needed). Writes a header row to brand-new files.
     pub fn open(path: impl Into<PathBuf>) -> Result<Self> {
         let path = path.into();
-        let fresh = !path.exists() || std::fs::metadata(&path).map(|m| m.len() == 0).unwrap_or(true);
+        let fresh = !path.exists()
+            || std::fs::metadata(&path)
+                .map(|m| m.len() == 0)
+                .unwrap_or(true);
         if fresh {
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent).ok();
             }
-            let mut w = BufWriter::new(File::create(&path).with_context(|| format!("creating {}", path.display()))?);
+            let mut w = BufWriter::new(
+                File::create(&path).with_context(|| format!("creating {}", path.display()))?,
+            );
             writeln!(
                 w,
                 "ts,status,capacity_pct,voltage_v,power_w,energy_wh,energy_full_wh,energy_full_design_wh,cycle_count"

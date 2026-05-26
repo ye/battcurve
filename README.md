@@ -24,6 +24,47 @@ The logger, TUI, and web UI all share the same store, so you can log in one term
 and watch live in another. Run the logger across **at least one full charge or discharge
 cycle** before expecting clean V-vs-SoC and dQ/dV curves.
 
+## Command-line interface
+
+The `just` recipes are thin wrappers around a single binary, `battcurve`. You can run it
+directly without `just`.
+
+```sh
+cargo build --release          # build → target/release/battcurve
+just install                   # or: cargo install --path .  (→ ~/.cargo/bin/battcurve)
+battcurve --help               # top-level help; --version for the version
+```
+
+Once installed (or via `./target/release/battcurve`), the subcommands are:
+
+```sh
+# Background logger — sample forever at an interval; Ctrl-C to stop.
+battcurve log   [--interval 10s] [--store sqlite|csv] [--battery BAT0]
+
+# One-shot capture — sample until a stop condition, then print a summary.
+battcurve capture [--interval 10s] [--store sqlite|csv] [--battery BAT0] \
+                  [--until ctrl-c|full|empty]
+
+# htop-style live terminal monitor (press q / Esc to quit).
+battcurve tui   [--store sqlite|csv] [--battery BAT0]
+
+# Local web UI with the interactive analysis charts.
+battcurve serve [--port 8787] [--store sqlite|csv]
+
+# Print the resolved data-file paths.
+battcurve paths
+```
+
+Flags (all optional):
+
+| Flag | Applies to | Default | Meaning |
+|------|------------|---------|---------|
+| `--interval` | `log`, `capture` | `10s` | Sample period; accepts `500ms`, `5s`, `1m`, `1h`, or a bare number (seconds). |
+| `--store` | all but `paths` | `sqlite` | Storage backend: `sqlite` (WAL, concurrent) or `csv` (human-readable). |
+| `--battery` | `log`, `capture`, `tui` | first `BAT*` | Which `/sys/class/power_supply` device to read. |
+| `--until` | `capture` | `ctrl-c` | Stop on `ctrl-c`, when `full`, or when `empty`. |
+| `--port` | `serve` | `8787` | Port to bind on `127.0.0.1`. |
+
 ## The charts
 
 - **Charge / discharge over time** — SoC %, voltage, and power on a shared time axis.
@@ -73,10 +114,10 @@ restarts on failure.
 ## Layout
 
 ```
-justfile       command runner (build / test / lint / run-* / serve / install-service)
+justfile       command runner (build / install / test / lint / run-* / serve / install-service)
 src/core/      sample, reader (sysfs), storage (csv|sqlite), analysis (sessions, dQ/dV, CC/CV, health)
 src/cmd/       log, capture, tui, serve
-src/web/       index.html (uPlot charts)
+src/web/       index.html + vendored uplot.min.js / uplot.min.css (inlined when served)
 systemd/       user logger unit
 ```
 
@@ -91,9 +132,10 @@ just lint      # clippy with -D warnings
 ## Notes
 
 - The web UI refreshes by **polling** the JSON API every 5 s (no WebSocket).
-- uPlot is loaded from a CDN, so the first page load needs internet access. Vendor
-  `uPlot.iife.min.js` / `uPlot.min.css` into `src/web/` and adjust the `<script>`/`<link>`
-  tags if you need fully offline operation.
+- The page is **fully self-contained and offline**: uPlot's JS/CSS are vendored in
+  `src/web/` (`uplot.min.js`, `uplot.min.css`) and inlined into the served HTML at compile
+  time, so no CDN or external requests are made. To upgrade uPlot, replace those two files.
+- Charts follow the OS light/dark theme (canvas axis colors are read from CSS tokens).
 - A clean dQ/dV or full discharge curve only appears after a real charge/discharge cycle
   has been logged.
 

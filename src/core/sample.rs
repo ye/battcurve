@@ -124,9 +124,15 @@ mod tests {
 
     #[test]
     fn status_parses_both_spellings() {
-        assert_eq!("Discharging".parse::<Status>().unwrap(), Status::Discharging);
+        assert_eq!(
+            "Discharging".parse::<Status>().unwrap(),
+            Status::Discharging
+        );
         assert_eq!("charging".parse::<Status>().unwrap(), Status::Charging);
-        assert_eq!("not charging".parse::<Status>().unwrap(), Status::NotCharging);
+        assert_eq!(
+            "not charging".parse::<Status>().unwrap(),
+            Status::NotCharging
+        );
         assert_eq!("weird".parse::<Status>().unwrap(), Status::Unknown);
     }
 }

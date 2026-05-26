@@ -91,10 +91,14 @@ fn draw(f: &mut Frame, history: &VecDeque<Sample>) {
     let latest = filled.last();
 
     // --- Gauges: SoC + Health ---
-    let g = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(rows[0]);
-    let soc = latest.map(|s| (s.capacity_pct / 100.0).clamp(0.0, 1.0)).unwrap_or(0.0);
-    let health = latest.map(|s| (s.health_pct() / 100.0).clamp(0.0, 1.0)).unwrap_or(0.0);
+    let g =
+        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(rows[0]);
+    let soc = latest
+        .map(|s| (s.capacity_pct / 100.0).clamp(0.0, 1.0))
+        .unwrap_or(0.0);
+    let health = latest
+        .map(|s| (s.health_pct() / 100.0).clamp(0.0, 1.0))
+        .unwrap_or(0.0);
     f.render_widget(
         Gauge::default()
             .block(Block::bordered().title(" State of Charge "))
@@ -116,9 +120,12 @@ fn draw(f: &mut Frame, history: &VecDeque<Sample>) {
     f.render_widget(stats_paragraph(latest, history.len()), rows[1]);
 
     // --- Sparklines: power + voltage ---
-    let s = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(rows[2]);
-    let power: Vec<u64> = filled.iter().map(|x| (x.power_w.abs() * 100.0) as u64).collect();
+    let s =
+        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(rows[2]);
+    let power: Vec<u64> = filled
+        .iter()
+        .map(|x| (x.power_w.abs() * 100.0) as u64)
+        .collect();
     let vmin = filled.iter().map(|x| x.voltage_v).fold(f64::MAX, f64::min);
     let volt: Vec<u64> = filled
         .iter()
@@ -162,9 +169,8 @@ fn stats_paragraph(latest: Option<&Sample>, n: usize) -> Paragraph<'static> {
             ]
         }
     };
-    Paragraph::new(lines).block(
-        Block::bordered().title(format!(" battcurve — live  ({n} samples)   [q to quit] ")),
-    )
+    Paragraph::new(lines)
+        .block(Block::bordered().title(format!(" battcurve — live  ({n} samples)   [q to quit] ")))
 }
 
 fn time_estimate(s: &Sample) -> String {
@@ -178,5 +184,9 @@ fn time_estimate(s: &Sample) -> String {
         _ => return "Estimate: --".into(),
     };
     let hours = wh / p;
-    format!("{label}: {}h {:02}m", hours as u64, ((hours.fract()) * 60.0) as u64)
+    format!(
+        "{label}: {}h {:02}m",
+        hours as u64,
+        ((hours.fract()) * 60.0) as u64
+    )
 }
