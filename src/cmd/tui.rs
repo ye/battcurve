@@ -99,52 +99,116 @@ fn draw(f: &mut Frame, history: &VecDeque<Sample>) {
     let health = latest
         .map(|s| (s.health_pct() / 100.0).clamp(0.0, 1.0))
         .unwrap_or(0.0);
-    f.render_widget(
-        Gauge::default()
-            .block(Block::bordered().title(" State of Charge "))
-            .gauge_style(Style::new().fg(Color::Green))
-            .ratio(soc)
-            .label(format!("{:.1}%", soc * 100.0)),
-        g[0],
-    );
-    f.render_widget(
-        Gauge::default()
-            .block(Block::bordered().title(" Battery Health "))
-            .gauge_style(Style::new().fg(Color::Cyan))
-            .ratio(health)
-            .label(format!("{:.1}%", health * 100.0)),
-        g[1],
-    );
+    render_gauge(f, g[0], " State of Charge ", soc, Color::Green);
+    render_gauge(f, g[1], " Battery Health ", health, Color::Cyan);
 
     // --- Stats ---
     f.render_widget(stats_paragraph(latest, history.len()), rows[1]);
 
-    // --- Sparklines: power + voltage ---
-    let s =
+    // --- Line charts with labeled Y axes (units + scale) ---
+    let cols =
         Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(rows[2]);
-    let power: Vec<u64> = filled
+    let power_data: Vec<(f64, f64)> = filled
         .iter()
-        .map(|x| (x.power_w.abs() * 100.0) as u64)
+        .enumerate()
+        .map(|(i, x)| (i as f64, x.power_w.abs()))
         .collect();
-    let vmin = filled.iter().map(|x| x.voltage_v).fold(f64::MAX, f64::min);
-    let volt: Vec<u64> = filled
+    let volt_data: Vec<(f64, f64)> = filled
         .iter()
-        .map(|x| ((x.voltage_v - vmin) * 1000.0).max(0.0) as u64)
+        .enumerate()
+        .map(|(i, x)| (i as f64, x.voltage_v))
         .collect();
-    f.render_widget(
-        Sparkline::default()
-            .block(Block::bordered().title(" Power (W) "))
-            .style(Style::new().fg(Color::Yellow))
-            .data(&power),
-        s[0],
-    );
-    f.render_widget(
-        Sparkline::default()
-            .block(Block::bordered().title(" Voltage (relative) "))
-            .style(Style::new().fg(Color::Magenta))
-            .data(&volt),
-        s[1],
-    );
+    render_line_chart(f, cols[0], "Power", "W", Color::Yellow, &power_data);
+    render_line_chart(f, cols[1], "Voltage", "V", Color::Magenta, &volt_data);
+}
+
+/// A bordered horizontal bar gauge whose percentage label is drawn in inverse
+/// color per cell: dark-on-fill where the bar covers the text, color-on-dark
+/// where it doesn't. `ratio` is 0.0..=1.0.
+fn render_gauge(f: &mut Frame, area: Rect, title: &str, ratio: f64, color: Color) {
+    let block = Block::bordered().title(title.to_string());
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+    if inner.width == 0 || inner.height == 0 {
+        return;
+    }
+
+    let ratio = ratio.clamp(0.0, 1.0);
+    let filled = (ratio * inner.width as f64).round() as u16;
+    let bg = Color::Reset; // the terminal's own background (theme-agnostic)
+    let buf = f.buffer_mut();
+
+    // Paint the bar: colored background for the filled portion, plain otherwise.
+    for y in inner.top()..inner.bottom() {
+        for x in inner.left()..inner.right() {
+            let on_bar = x - inner.left() < filled;
+            buf[(x, y)].set_symbol(" ").set_bg(if on_bar { color } else { bg });
+        }
+    }
+
+    // Overlay the centered "NN.N%" label, inverting fg/bg per cell.
+    let label = format!("{:.1}%", ratio * 100.0);
+    let start = inner.left() + inner.width.saturating_sub(label.len() as u16) / 2;
+    let row = inner.top() + inner.height / 2;
+    for (i, ch) in label.chars().enumerate() {
+        let x = start + i as u16;
+        if x >= inner.right() {
+            break;
+        }
+        let on_bar = x - inner.left() < filled;
+        let (fg, cell_bg) = if on_bar { (bg, color) } else { (color, bg) };
+        buf[(x, row)]
+            .set_char(ch)
+            .set_style(Style::new().fg(fg).bg(cell_bg).add_modifier(Modifier::BOLD));
+    }
+}
+
+/// A bordered line chart with a labeled Y axis (min / mid / max in `unit`).
+fn render_line_chart(
+    f: &mut Frame,
+    area: Rect,
+    title: &str,
+    unit: &str,
+    color: Color,
+    data: &[(f64, f64)],
+) {
+    let block = Block::bordered().title(format!(" {title} ({unit}) "));
+    if data.len() < 2 {
+        f.render_widget(block, area);
+        return;
+    }
+    let xmax = (data.len() - 1) as f64;
+    let mut ymin = data.iter().map(|p| p.1).fold(f64::MAX, f64::min);
+    let mut ymax = data.iter().map(|p| p.1).fold(f64::MIN, f64::max);
+    if (ymax - ymin).abs() < 1e-6 {
+        ymin -= 0.5;
+        ymax += 0.5;
+    }
+    let pad = (ymax - ymin) * 0.08;
+    ymin -= pad;
+    ymax += pad;
+    let ymid = (ymin + ymax) / 2.0;
+
+    let datasets = vec![Dataset::default()
+        .marker(symbols::Marker::Braille)
+        .graph_type(GraphType::Line)
+        .style(Style::new().fg(color))
+        .data(data)];
+
+    let chart = Chart::new(datasets)
+        .block(block)
+        .x_axis(Axis::default().bounds([0.0, xmax]))
+        .y_axis(
+            Axis::default()
+                .style(Style::new().fg(Color::DarkGray))
+                .bounds([ymin, ymax])
+                .labels([
+                    format!("{ymin:.2}"),
+                    format!("{ymid:.2}"),
+                    format!("{ymax:.2}"),
+                ]),
+        );
+    f.render_widget(chart, area);
 }
 
 fn stats_paragraph(latest: Option<&Sample>, n: usize) -> Paragraph<'static> {
